@@ -18,12 +18,7 @@ float uint32_to_float(uint32_t u) {
 
 int main(int argc, char *argv[]) {
     FILE *out;
-    HMODULE hLib = LoadLibraryA("/home/emil/code/ucrtcringe/dll/ucrtbase.dll");
-    //HMODULE hLib = LoadLibraryA("ucrtbase.dll");
-    if (!hLib) {
-        printf("Failed to load ucrtbase.dll\n");
-        return 1;
-    }
+    HMODULE hLib;
 
     asinf_func my_asinf = (asinf_func)GetProcAddress(hLib, "asinf");
     if (!my_asinf) {
@@ -60,24 +55,28 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    for (uint32_t i = 0; ; ++i) {
+    if (native == 0) {
+        hLib = LoadLibraryA("/home/emil/code/ucrtcringe/dll/ucrtbase_builtin.dll");
+    } else {
+        hLib = LoadLibraryA("/home/emil/code/ucrtcringe/dll/ucrtbase.dll");
+    }
+
+    if (!hLib) {
+        printf("Failed to load ucrtbase.dll\n");
+        return 1;
+    }
+
+    // focus on 0.00024414065 <= x < 0.5 for now
+    // this has a different (and likely simpler) implementation
+    for (uint32_t i = 0x39800001; ; ++i) {
+        if (i == 0x3f000000) break;
+
         float input = uint32_to_float(i);
-        float result_sqrt = sqrtf(input);
-        float result_acos = acosf(input);
-        float result_asin;
-        if (native == 0) {
-            result_asin = asinf(input);
-        } else {
-            result_asin = my_asinf(input);
-        }
+        float result_asin = my_asinf(input);
 
-        // Write input, sqrt, asin, acos (all as float32)
+        // Write input, asin (all as float32)
         fwrite(&input, sizeof(float), 1, out);
-        fwrite(&result_sqrt, sizeof(float), 1, out);
         fwrite(&result_asin, sizeof(float), 1, out);
-        fwrite(&result_acos, sizeof(float), 1, out);
-
-        if (i == 0xFFFFFFFF) break;
     }
 
     fclose(out);

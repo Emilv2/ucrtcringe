@@ -3,6 +3,7 @@ import numpy as np
 import os
 import struct
 import sys
+import math
 
 c_file = "math_test.c"
 exe_name = "math_test.exe"
@@ -39,7 +40,7 @@ def compile_math_test():
             "-O2",
             "-o", exe_name,
             c_file,
-#            "-lm"
+            "-lm"
         ],
         cwd=script_dir,
         capture_output=True
@@ -96,7 +97,7 @@ def floats_exact_equal_batch(arr1, arr2):
     exact_match = (a64 == b64)
     return nan_both | inf_both | exact_match
 
-def diff_outputs(native_path, custom_path, diff_out_path, max_to_keep=None):
+def diff_outputs(native_path, custom_path, diff_out_path, max_to_keep=None, write_output=True):
     total_count = 0
     diff_count = 0
 
@@ -122,22 +123,24 @@ def diff_outputs(native_path, custom_path, diff_out_path, max_to_keep=None):
             # Compare all three outputs: sqrt, asin, acos
             eq_sqrt = floats_exact_equal_batch(native_arr[:, 1], custom_arr[:, 1])
             eq_asin = floats_exact_equal_batch(native_arr[:, 2], custom_arr[:, 2])
-            eq_acos = floats_exact_equal_batch(native_arr[:, 3], custom_arr[:, 3])
-            diff_mask = ~(eq_sqrt & eq_asin & eq_acos)
+            #eq_asin = floats_exact_equal_batch(asinf(native_arr[:, 0]), custom_arr[:, 2])
+            #eq_acos = floats_exact_equal_batch(native_arr[:, 3], custom_arr[:, 3])
+            diff_mask = ~(eq_asin)
             diff_idx = np.where(diff_mask)[0]
 
             for idx in diff_idx:
                 # Write input, native_sqrt, custom_sqrt, native_asin, custom_asin, native_acos, custom_acos
-                f_diff.write(struct.pack(
-                    "f"      # input
-                    "f" "f"  # sqrt_native, sqrt_custom
-                    "f" "f"  # asin_native, asin_custom
-                    "f" "f", # acos_native, acos_custom
-                    native_arr[idx, 0],
-                    native_arr[idx, 1], custom_arr[idx, 1],
-                    native_arr[idx, 2], custom_arr[idx, 2],
-                    native_arr[idx, 3], custom_arr[idx, 3],
-                ))
+                if write_output:
+                    f_diff.write(struct.pack(
+                        "f"      # input
+                        "f" "f"  # sqrt_native, sqrt_custom
+                        "f" "f"  # asin_native, asin_custom
+                        "f" "f", # acos_native, acos_custom
+                        native_arr[idx, 0],
+                        native_arr[idx, 1], custom_arr[idx, 1],
+                        native_arr[idx, 2], custom_arr[idx, 2],
+                        native_arr[idx, 3], custom_arr[idx, 3],
+                    ))
                 diff_count += 1
                 if max_to_keep is not None and diff_count >= max_to_keep:
                     print(f"Stopped at max_to_keep={max_to_keep} diffs.")
@@ -151,22 +154,86 @@ def diff_outputs(native_path, custom_path, diff_out_path, max_to_keep=None):
 
 def print_diff_samples(diff_path, max_samples=10):
     with open(diff_path, "rb") as f:
+        max_input = -1
+        min_input = 10
         count = 0
         while True:
             data = f.read(28)  # 7 floats: input, sqrt_native, sqrt_custom, asin_native, asin_custom, acos_native, acos_custom
             if not data:
                 break
             inp, sqrt_nat, sqrt_cust, asin_nat, asin_cust, acos_nat, acos_cust = struct.unpack("fffffff", data)
-            print(f"input={inp}")
-            print(f"  sqrt: native={sqrt_nat} | custom={sqrt_cust}")
-            print(f"  asin: native={asin_nat} | custom={asin_cust}")
-            print(f"  acos: native={acos_nat} | custom={acos_cust}")
-            print("-" * 60)
-            count += 1
-            if count >= max_samples:
-                break
-        if count == 0:
-            print("No differences found.")
+            # print(f"input={inp}")
+            # print(f"  sqrt: native={sqrt_nat} | custom={sqrt_cust}")
+            # print(f"  asin: native={asin_nat} | custom={asin_cust}")
+            # print(f"  acos: native={acos_nat} | custom={acos_cust}")
+            # print("-" * 60)
+            # count += 1
+            # if count >= max_samples:
+            #     break
+        # if count == 0:
+        #     print("No differences found.")
+            if abs(inp) > abs(max_input):
+                max_input = inp
+            if abs(inp) < abs(min_input):
+                min_input = inp
+        print(f"{max_input=}")
+        print(f"{min_input=}")
+
+def asinf_R(z):
+    # coefficients for R(x^2)
+   #p1 = 1.66666672e-01
+    p1 = 1.6666666e-01
+    p2 = -5.11644611e-02
+    p3 = -1.21124933e-02
+    p4 = -3.58742251e-03
+    q1 = -7.56982703e-01
+
+    p = z * (p1 + z * (p2 + z * (p3 + z * p4)))
+    q = 1.0 + z * q1
+    return p / q
+
+def asinf(x):
+    pio2 = 1.570796326794896558e+00
+    pio4_hi = 0.785398125648
+    pio2_lo = 7.54978941586e-08
+
+    x = np.float32(x)  # ensure float32 for bit pattern compatibility
+    absx = np.abs(x)
+    ix = np.frombuffer(x.tobytes(), dtype=np.uint32)[()] & 0x7fffffff
+
+    # Handle |x| >= 1
+    if ix >= 0x3f800000:
+        if ix == 0x3f800000:
+            return float(x * pio2 + 7.5231638453e-37)
+        if np.isnan(x):
+            return float(x)
+        raise ValueError("math domain error for asinf({})".format(x))
+
+    # |x| < 0.5
+    if ix < 0x3f000000:
+        if ix < 0x39800000 and ix >= 0x00800000:
+            return float(x)
+        return float(x + x * asinf_R(x * x))
+
+    # 1 > |x| >= 0.5
+    z = (1 - absx) * 0.5
+    s = np.sqrt(z).astype(np.float32)
+    # f+c = sqrt(z)
+    # Simulate truncation of lower 16 bits (as in C: f = s with 16 LSB zeroed)
+    s_bits = np.frombuffer(s.tobytes(), dtype=np.uint32)[()]
+    f_bits = s_bits & 0xffff0000
+    f = np.frombuffer(np.uint32(f_bits).tobytes(), dtype=np.float32)[()]
+    c = (z - f * f) / (s + f)
+    res = pio4_hi - (2 * s * asinf_R(z) - (pio2_lo - 2 * c) - (pio4_hi - 2 * f))
+    if x < 0:
+        return np.float32(-res)
+    return np.float32(res)
+
+def asinf_arr(x):
+    return np.stack(np.vectorize(asinf)(test), axis=2)
+
+
+
 
 if __name__ == "__main__":
     if not os.path.isfile(c_path):
@@ -182,10 +249,10 @@ if __name__ == "__main__":
     get_custom_results()
 
     # # 2. Compare piecewise in large batches, only keep diffs
-    diff_bin_path = os.path.join(script_dir, "math_test_diff.bin")
-    print("Comparing outputs and saving only differences...")
-    diff_outputs(bin_path_native, bin_path_custom, diff_bin_path)
+    #diff_bin_path = os.path.join(script_dir, "math_test_diff.bin")
+    #print("Comparing outputs and saving only differences...")
+    #diff_outputs(bin_path_native, bin_path_custom, diff_bin_path, write_output=True)
 
     # # 3. Print a sample of diffs
-    print("\nSample of differing results:")
-    print_diff_samples(diff_bin_path, max_samples=10)
+    #print("\nSample of differing results:")
+    #print_diff_samples(diff_bin_path, max_samples=10)
