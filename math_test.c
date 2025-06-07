@@ -20,13 +20,6 @@ int main(int argc, char *argv[]) {
     FILE *out;
     HMODULE hLib;
 
-    asinf_func my_asinf = (asinf_func)GetProcAddress(hLib, "asinf");
-    if (!my_asinf) {
-        printf("Failed to get address of asin\n");
-        FreeLibrary(hLib);
-        return 1;
-    }
-
     int native = 0;
     const char *filename = "math_test_out.bin";
     if (argc > 1) {
@@ -63,6 +56,13 @@ int main(int argc, char *argv[]) {
 
     if (!hLib) {
         printf("Failed to load ucrtbase.dll\n");
+        return 1;
+    }
+    
+    asinf_func my_asinf = (asinf_func)GetProcAddress(hLib, "asinf");
+    if (!my_asinf) {
+        printf("Failed to get address of asin\n");
+        FreeLibrary(hLib);
         return 1;
     }
 
