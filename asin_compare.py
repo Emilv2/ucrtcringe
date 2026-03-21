@@ -123,10 +123,11 @@ def compare_python_vs_native(native_path):
                   f"python={py_outputs[i]:.17e}  ULP_diff={ulp_diff}")
 
         # Analyze which ranges have the most differences
-        tiny_mask = np.abs(inputs[diffs]) < 2**-26
-        low_mask = (np.abs(inputs[diffs]) >= 2**-26) & (np.abs(inputs[diffs]) < 0.5)
-        mid_mask = (np.abs(inputs[diffs]) >= 0.5) & (np.abs(inputs[diffs]) < 0.975)
-        high_mask = np.abs(inputs[diffs]) >= 0.975
+        abs_diff_inputs = np.abs(inputs[diffs])
+        tiny_mask = abs_diff_inputs < 2**-26
+        low_mask = (abs_diff_inputs >= 2**-26) & (abs_diff_inputs < 0.5)
+        mid_mask = (abs_diff_inputs >= 0.5) & (abs_diff_inputs < 0.975)
+        high_mask = abs_diff_inputs >= 0.975
 
         print(f"\nDifferences by range:")
         print(f"  |x| < 2^-26 (identity):     {np.sum(tiny_mask)}")

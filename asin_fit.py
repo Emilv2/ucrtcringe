@@ -67,6 +67,9 @@ if __name__ == "__main__":
         7.70381505559019352791e-02,   # qS4
     ]
 
+    names = ['pS0', 'pS1', 'pS2', 'pS3', 'pS4', 'pS5',
+             'qS1', 'qS2', 'qS3', 'qS4']
+
     # --- Fit for |x| < 0.5 range ---
     mask_low = (np.abs(inputs) >= 2**-26) & (np.abs(inputs) < 0.5)
     x_low = inputs[mask_low]
@@ -79,8 +82,6 @@ if __name__ == "__main__":
         )
 
         print("=== Fitted coefficients for |x| < 0.5 range ===")
-        names = ['pS0', 'pS1', 'pS2', 'pS3', 'pS4', 'pS5',
-                 'qS1', 'qS2', 'qS3', 'qS4']
         for name, val in zip(names, popt_low):
             print(f"  {name} = {val:.20e}")
         print("\nCovariance diagonal (variance of each parameter):")
