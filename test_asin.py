@@ -10,6 +10,7 @@ Run: python3 test_asin.py
 import struct
 import sys
 import os
+import tempfile
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -96,12 +97,12 @@ eq = floats_exact_equal_batch(a, b)
 check("floats_exact_equal_batch", list(eq) == [True, False, True, True, True, True])
 
 # Generate synthetic native data and compare
-tmpbin = "/tmp/test_asin_native.bin"
-test_inputs = np.linspace(0.001, 0.999, 500)
-with open(tmpbin, 'wb') as f:
+with tempfile.NamedTemporaryFile(suffix='.bin', delete=False) as tmp:
+    tmpbin = tmp.name
+    test_inputs = np.linspace(0.001, 0.999, 500)
     for x in test_inputs:
         result = float(np.arcsin(x))
-        f.write(struct.pack('<dd', x, result))
+        tmp.write(struct.pack('<dd', x, result))
 ndiffs = compare_python_vs_native(tmpbin)
 check(f"compare_python_vs_native ndiffs={ndiffs}", ndiffs <= len(test_inputs))
 os.remove(tmpbin)
@@ -160,13 +161,15 @@ import subprocess
 script_dir = os.path.dirname(os.path.abspath(__file__))
 gcc = "x86_64-w64-mingw32-gcc"
 if os.path.isfile(os.path.join(script_dir, "asin_test.c")):
+    with tempfile.NamedTemporaryFile(suffix='.exe', delete=False) as tmp:
+        tmp_exe = tmp.name
     result = subprocess.run(
-        [gcc, "-O2", "-o", "/tmp/asin_test.exe", "asin_test.c", "-lm"],
+        [gcc, "-O2", "-o", tmp_exe, "asin_test.c", "-lm"],
         cwd=script_dir, capture_output=True
     )
     if result.returncode == 0:
         check("asin_test.c compiles", True)
-        os.remove("/tmp/asin_test.exe")
+        os.remove(tmp_exe)
     else:
         # MinGW might not be installed
         if b"not found" in result.stderr or result.returncode == 127:
